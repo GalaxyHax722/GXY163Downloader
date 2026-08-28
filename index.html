@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GXY音乐下载器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
+            background: #08080f;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #f0f2f8;
+            overflow-x: hidden;
+        }
+
+        .glow-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .glow-bg .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.25;
+            will-change: transform;
+            animation: floatOrb 26s ease-in-out infinite alternate;
+        }
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, #7b61ff, #4f46e5 40%, transparent 70%);
+            top: -20%;
+            left: -10%;
+            animation-duration: 30s;
+        }
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #00d4aa, #0ea5e9 50%, transparent 75%);
+            bottom: -15%;
+            right: -10%;
+            animation-duration: 34s;
+            animation-delay: -8s;
+        }
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #f472b6, #ec4899 40%, transparent 70%);
+            top: 45%;
+            left: 50%;
+            animation-duration: 28s;
+            animation-delay: -14s;
+            opacity: 0.15;
+        }
+
+        @keyframes floatOrb {
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(50px, -40px) scale(1.1); }
+            66% { transform: translate(-40px, 30px) scale(0.9); }
+            100% { transform: translate(30px, 50px) scale(1.05); }
+        }
+
+        .main {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 560px;
+        }
+
+        /* ===== 顶部状态栏 ===== */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            min-height: 44px;
+            flex-wrap: wrap;
+        }
+
+        .pill-inner {
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 999px;
+            padding: 7px 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.30);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        .pill-inner .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            transition: all 0.3s ease;
+        }
+        .pill-inner.active {
+            background: rgba(0, 212, 170, 0.05);
+            border-color: #00d4aa;
+            color: #00d4aa;
+            box-shadow: 0 0 30px rgba(0, 212, 170, 0.08);
+        }
+        .pill-inner.active .dot { animation: pulseDot 1.5s ease-in-out infinite; }
+        .pill-inner.error {
+            background: rgba(255, 71, 87, 0.04);
+            border-color: #ff4757;
+            color: #ff4757;
+            box-shadow: 0 0 30px rgba(255, 71, 87, 0.08);
+        }
+        .pill-inner.success {
+            background: rgba(0, 212, 170, 0.04);
+            border-color: #00d4aa;
+            color: #00d4aa;
+            box-shadow: 0 0 32px rgba(0, 212, 170, 0.10);
+        }
+        .pill-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.05);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.6); }
+        }
+
+        /* ===== 停止播放按钮 ===== */
+        .stop-btn {
+            background: rgba(255, 71, 87, 0.06);
+            border: 1px solid rgba(255, 71, 87, 0.12);
+            border-radius: 999px;
+            padding: 7px 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #ff4757;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 16px rgba(255, 71, 87, 0.03);
+            font-family: inherit;
+            opacity: 0;
+            transform: scale(0.85) translateX(10px);
+            pointer-events: none;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .stop-btn.show {
+            opacity: 1;
+            transform: scale(1) translateX(0);
+            pointer-events: auto;
+        }
+        .stop-btn:hover {
+            background: rgba(255, 71, 87, 0.10);
+            border-color: rgba(255, 71, 87, 0.25);
+            box-shadow: 0 0 30px rgba(255, 71, 87, 0.10);
+            transform: scale(1.02);
+        }
+        .stop-btn:active {
+            transform: scale(0.95);
+        }
+        .stop-btn .stop-icon {
+            width: 14px;
+            height: 14px;
+            background: #ff4757;
+            border-radius: 2px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+        .stop-btn:hover .stop-icon {
+            background: #ff6b7a;
+        }
+
+        /* ===== 卡片 ===== */
+        .card {
+            background: rgba(255, 255, 255, 0.015);
+            backdrop-filter: blur(56px) saturate(240%);
+            -webkit-backdrop-filter: blur(56px) saturate(240%);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 36px;
+            padding: 32px 28px 28px;
+            box-shadow: 0 20px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.015) inset;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: visible;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 22px;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 650;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #f0f2f8 0%, rgba(240, 242, 248, 0.4) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.015);
+            border-radius: 16px;
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+        .tab {
+            flex: 1;
+            padding: 9px 0;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.20);
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        .tab.active {
+            background: rgba(0, 212, 170, 0.04);
+            color: #00d4aa;
+            box-shadow: 0 0 16px rgba(0, 212, 170, 0.03);
+            border: 1px solid rgba(0, 212, 170, 0.04);
+        }
+        .tab:hover:not(.active) { color: rgba(255, 255, 255, 0.40); }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-top: 4px;
+            position: relative;
+            z-index: 1;
+        }
+        .input-box {
+            flex: 1;
+            position: relative;
+        }
+        .input-box input {
+            width: 100%;
+            height: 54px;
+            padding: 0 44px 0 18px;
+            background: rgba(255, 255, 255, 0.015);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1.5px solid rgba(255, 255, 255, 0.03);
+            border-radius: 18px;
+            font-size: 14px;
+            font-family: inherit;
+            color: #f0f2f8;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        .input-box input::placeholder {
+            color: rgba(255, 255, 255, 0.12);
+            font-size: 13px;
+        }
+        .input-box input:focus {
+            border-color: #00d4aa;
+            background: rgba(0, 212, 170, 0.015);
+            box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.03), 0 0 30px rgba(0, 212, 170, 0.03);
+        }
+        .clear-btn {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(8px);
+            color: rgba(255, 255, 255, 0.15);
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s ease;
+        }
+        .clear-btn.visible { opacity: 1;
+            pointer-events: auto; }
+        .clear-btn:hover { background: rgba(0, 212, 170, 0.06);
+            color: #00d4aa; }
+
+        .action-btn {
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            border: none;
+            background: #00d4aa;
+            color: #000;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 24px rgba(0, 212, 170, 0.10);
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+        .action-btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20), transparent);
+            transition: left 0.6s ease;
+        }
+        .action-btn:hover::after { left: 100%; }
+        .action-btn:hover {
+            transform: scale(1.04) translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0, 212, 170, 0.18);
+        }
+        .action-btn:active { transform: scale(0.94); }
+        .action-btn:disabled {
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .action-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: transform 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+        .action-btn:hover svg { transform: translateY(2px); }
+        .action-btn.loading svg { animation: bounce 0.6s ease-in-out infinite; }
+        @keyframes bounce {
+            0%,
+            100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .progress {
+            margin-top: 22px;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: all 0.5s ease;
+            pointer-events: none;
+        }
+        .progress.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 7px;
+            font-size: 12px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.25);
+        }
+        .progress-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4aa, #00d4aa);
+            border-radius: 999px;
+            transition: width 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+            width: 0%;
+            position: relative;
+            box-shadow: 0 0 16px rgba(0, 212, 170, 0.10);
+        }
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 30px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20));
+            border-radius: 999px;
+            animation: shimmer 1.2s ease-in-out infinite;
+        }
+        @keyframes shimmer {
+            0%,
+            100% { opacity: 0.2; }
+            50% { opacity: 1; }
+        }
+
+        .queue-box {
+            margin-top: 14px;
+            max-height: 380px;
+            overflow-y: auto;
+            overflow-x: visible;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: all 0.4s ease;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.03) transparent;
+            padding-right: 2px;
+            position: relative;
+        }
+        .queue-box::-webkit-scrollbar { width: 3px; }
+        .queue-box::-webkit-scrollbar-track { background: transparent; }
+        .queue-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.04);
+            border-radius: 4px; }
+        .queue-box.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .q-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.01);
+            backdrop-filter: blur(8px);
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.35);
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            animation: slideIn 0.3s ease;
+            position: relative;
+            overflow: visible;
+        }
+        @keyframes slideIn {
+            from { opacity: 0;
+                transform: translateX(-10px); }
+            to { opacity: 1;
+                transform: translateX(0); }
+        }
+        .q-item.ok {
+            color: #00d4aa;
+            background: rgba(0, 212, 170, 0.02);
+            border-color: rgba(0, 212, 170, 0.04);
+        }
+        .q-item.err {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.015);
+            border-color: rgba(255, 71, 87, 0.04);
+        }
+        .q-item.result {
+            color: rgba(255, 255, 255, 0.55);
+            border-color: rgba(255, 255, 255, 0.015);
+            cursor: pointer;
+            padding-right: 56px;
+            overflow: visible;
+        }
+        .q-item.result:hover {
+            background: rgba(0, 212, 170, 0.02);
+            border-color: rgba(0, 212, 170, 0.06);
+        }
+        .q-item .icon {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.015);
+        }
+        .q-item .meta {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.10);
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .q-item .q-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ===== 右侧菜单 ===== */
+        .menu-wrap {
+            position: relative;
+            flex-shrink: 0;
+            margin-left: auto;
+            z-index: 50;
+            overflow: visible;
+        }
+
+        .menu-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.30);
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            letter-spacing: 1px;
+            line-height: 1;
+            position: relative;
+            z-index: 51;
+        }
+        .menu-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.60);
+        }
+        .menu-btn.active {
+            background: rgba(0, 212, 170, 0.12);
+            color: #00d4aa;
+        }
+
+        /* ===== 下拉菜单 ===== */
+        .dropdown-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            pointer-events: none;
+            display: none;
+        }
+        .dropdown-overlay.open {
+            display: block;
+            pointer-events: auto;
+        }
+
+        .dropdown {
+            position: fixed;
+            background: rgba(16, 16, 26, 0.97);
+            backdrop-filter: blur(32px);
+            -webkit-backdrop-filter: blur(32px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 6px 0;
+            min-width: 180px;
+            box-shadow: 0 20px 64px rgba(0, 0, 0, 0.9);
+            opacity: 0;
+            transform: scale(0.92) translateY(-8px);
+            pointer-events: none;
+            transition: all 0.2s ease;
+            z-index: 9999;
+        }
+        .dropdown.open {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+        }
+        .dropdown-item {
+            padding: 11px 20px;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .dropdown-item:hover {
+            background: rgba(0, 212, 170, 0.06);
+            color: #00d4aa;
+        }
+        .dropdown-item:active {
+            transform: scale(0.97);
+        }
+        .dropdown-item .icon {
+            font-size: 15px;
+            width: 22px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 18px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.05);
+            letter-spacing: 0.02em;
+            transition: color 0.3s ease;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(20px);
+            padding: 10px 24px;
+            border-radius: 14px;
+            color: #f0f2f8;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            opacity: 0;
+            transition: all 0.4s ease;
+            z-index: 99999;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        @media (max-width: 480px) {
+            .card { padding: 24px 16px 20px;
+                border-radius: 28px; }
+            .header h1 { font-size: 22px; }
+            .input-box input { height: 48px;
+                font-size: 13px;
+                border-radius: 14px; }
+            .action-btn { width: 48px;
+                height: 48px;
+                border-radius: 14px; }
+            .action-btn svg { width: 18px;
+                height: 18px; }
+            .tab { font-size: 12px;
+                padding: 7px 0; }
+            .q-item { padding: 8px 10px;
+                font-size: 12px;
+                padding-right: 48px; }
+            .menu-btn { width: 34px;
+                height: 34px;
+                font-size: 17px; }
+            .dropdown { min-width: 160px; }
+            .dropdown-item { font-size: 12px;
+                padding: 9px 16px; }
+            .stop-btn { font-size: 12px;
+                padding: 5px 14px; }
+            .stop-btn .stop-icon { width: 12px;
+                height: 12px; }
+            .status-bar { gap: 8px;
+                min-height: 40px; }
+            .pill-inner { font-size: 12px;
+                padding: 6px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="glow-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <div class="main">
+        <!-- ===== 状态栏：标签 + 停止按钮 ===== -->
+        <div class="status-bar" id="statusBar">
+            <div class="pill-inner" id="pill">
+                <span class="dot"></span>
+                <span id="pillText">准备就绪</span>
+            </div>
+            <button class="stop-btn" id="stopBtn">
+                <span class="stop-icon"></span>
+                停止播放
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <h1>163网易云音乐下载器</h1>
+                <div class="tabs" id="tabs">
+                    <button class="tab active" data-mode="id">识别码</button>
+                    <button class="tab" data-mode="search">歌名搜索</button>
+                    <button class="tab" data-mode="link">链接解析</button>
+                </div>
+            </div>
+
+            <div class="input-row">
+                <div class="input-box">
+                    <input type="text" id="input" placeholder="在此输入识别码,批量下载请使用英文逗号分隔 (如 A识别码,B识别码)" autocomplete="off">
+                    <button class="clear-btn" id="clear">✕</button>
+                </div>
+                <button class="action-btn" id="btn">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
+                        <line x1="5" y1="17" x2="19" y2="17"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="progress" id="progress">
+                <div class="progress-meta">
+                    <span id="progLabel">正在下载...</span>
+                    <span id="progPct">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progFill"></div>
+                </div>
+            </div>
+
+            <div class="queue-box" id="queue"></div>
+        </div>
+
+        <p class="footer" id="footer">批量下载请使用英文逗号分隔 (如 A识别码,B识别码)</p>
+    </div>
+
+    <!-- 固定层遮罩 -->
+    <div class="dropdown-overlay" id="dropdownOverlay"></div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function() {
+            const API = 'https://api.91videos.vip';
+            const LEVEL = 'jymaster';
+            const UNBLOCK = 'true';
+
+            const pill = document.getElementById('pill');
+            const pillText = document.getElementById('pillText');
+            const input = document.getElementById('input');
+            const clearBtn = document.getElementById('clear');
+            const btn = document.getElementById('btn');
+            const progress = document.getElementById('progress');
+            const progLabel = document.getElementById('progLabel');
+            const progPct = document.getElementById('progPct');
+            const progFill = document.getElementById('progFill');
+            const queue = document.getElementById('queue');
+            const footer = document.getElementById('footer');
+            const tabs = document.querySelectorAll('.tab');
+            const toast = document.getElementById('toast');
+            const overlay = document.getElementById('dropdownOverlay');
+            const stopBtn = document.getElementById('stopBtn');
+
+            let currentMode = 'id';
+            let downloading = false;
+            let abortCtrl = null;
+            let searchResults = [];
+            let activeDropdown = null;
+            let activeMenuBtn = null;
+            let currentAudio = null;
+            let isPlaying = false;
+
+            // ===== 停止播放控制 =====
+            function showStopBtn(show) {
+                if (show) {
+                    stopBtn.classList.add('show');
+                } else {
+                    stopBtn.classList.remove('show');
+                }
+            }
+
+            function stopPlayback() {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio = null;
+                }
+                isPlaying = false;
+                showStopBtn(false);
+                if (!downloading) {
+                    setPill('', '准备就绪');
+                }
+            }
+
+            stopBtn.addEventListener('click', function() {
+                stopPlayback();
+                showToast('⏹ 已停止播放');
+            });
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.add('show');
+                clearTimeout(toast._timer);
+                toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+            }
+
+            function setPill(state, text) {
+                pill.className = 'pill-inner' + (state ? ' ' + state : '');
+                pillText.textContent = text;
+                if (state === 'active') {
+                    if (!pill.querySelector('.pill-spinner')) {
+                        const sp = document.createElement('span');
+                        sp.className = 'pill-spinner';
+                        pill.insertBefore(sp, pillText);
+                    }
+                } else {
+                    const sp = pill.querySelector('.pill-spinner');
+                    if (sp) sp.remove();
+                }
+            }
+
+            function updateClear() {
+                clearBtn.classList.toggle('visible', input.value.trim().length > 0);
+            }
+            input.addEventListener('input', updateClear);
+            input.addEventListener('focus', updateClear);
+            input.addEventListener('blur', () => setTimeout(updateClear, 150));
+            clearBtn.addEventListener('click', () => {
+                input.value = '';
+                updateClear();
+                input.focus();
+                clearSearchResults();
+            });
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && !downloading) btn.click();
+            });
+
+            function clearSearchResults() {
+                searchResults = [];
+                const items = queue.querySelectorAll('.result');
+                items.forEach(el => el.remove());
+                if (!queue.querySelector('.q-item')) queue.classList.remove('show');
+                closeDropdown();
+            }
+
+            function resetProgress() {
+                progress.classList.remove('show');
+                progFill.style.width = '0%';
+                progPct.textContent = '0%';
+                progLabel.textContent = '正在下载...';
+            }
+
+            function setProgress(pct, label) {
+                progress.classList.add('show');
+                progFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+                progPct.textContent = Math.round(pct) + '%';
+                if (label) progLabel.textContent = label;
+            }
+
+            function closeDropdown() {
+                if (activeDropdown) {
+                    activeDropdown.classList.remove('open');
+                    activeDropdown.style.display = 'none';
+                    activeDropdown = null;
+                }
+                if (activeMenuBtn) {
+                    activeMenuBtn.classList.remove('active');
+                    activeMenuBtn = null;
+                }
+                overlay.classList.remove('open');
+                overlay.style.display = 'none';
+            }
+
+            function openDropdown(menuBtn, itemId) {
+                closeDropdown();
+
+                const rect = menuBtn.getBoundingClientRect();
+                const dropdown = document.createElement('div');
+                dropdown.className = 'dropdown';
+
+                const copyIdBtn = document.createElement('button');
+                copyIdBtn.className = 'dropdown-item';
+                copyIdBtn.innerHTML = '<span class="icon">📋</span> 复制特征码';
+
+                const copyLinkBtn = document.createElement('button');
+                copyLinkBtn.className = 'dropdown-item';
+                copyLinkBtn.innerHTML = '<span class="icon">🔗</span> 复制链接';
+
+                dropdown.appendChild(copyIdBtn);
+                dropdown.appendChild(copyLinkBtn);
+
+                const left = rect.right + 8;
+                const top = rect.top - 4;
+                dropdown.style.left = left + 'px';
+                dropdown.style.top = top + 'px';
+
+                if (left + 190 > window.innerWidth) {
+                    dropdown.style.left = (rect.left - 190) + 'px';
+                }
+                if (top + 120 > window.innerHeight) {
+                    dropdown.style.top = (rect.bottom - 120) + 'px';
+                }
+
+                document.body.appendChild(dropdown);
+
+                requestAnimationFrame(() => {
+                    dropdown.classList.add('open');
+                });
+
+                activeDropdown = dropdown;
+                activeMenuBtn = menuBtn;
+                menuBtn.classList.add('active');
+
+                overlay.style.display = 'block';
+                overlay.classList.add('open');
+
+                copyIdBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (itemId) {
+                        copyToClipboard(itemId, '✅ 已复制特征码: ' + itemId);
+                    }
+                    closeDropdown();
+                });
+
+                copyLinkBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (itemId) {
+                        const link = 'https://music.163.com/song?id=' + itemId;
+                        copyToClipboard(link, '✅ 已复制链接');
+                    }
+                    closeDropdown();
+                });
+
+                dropdown.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+
+            overlay.addEventListener('click', function() {
+                closeDropdown();
+            });
+
+            function copyToClipboard(text, successMsg) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast(successMsg);
+                    }).catch(() => {
+                        fallbackCopy(text, successMsg);
+                    });
+                } else {
+                    fallbackCopy(text, successMsg);
+                }
+            }
+
+            function fallbackCopy(text, successMsg) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                ta.style.top = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(successMsg);
+                } catch (e) {
+                    showToast('❌ 复制失败，请手动复制');
+                }
+                ta.remove();
+            }
+
+            function addItem(id, status, text, extra = '') {
+                const item = document.createElement('div');
+                const cls = status === 'done' ? 'ok' : status === 'failed' ? 'err' : '';
+                item.className = 'q-item ' + cls;
+                const icon = status === 'done' ? '✓' : status === 'failed' ? '✕' : '○';
+                item.innerHTML = `
+                        <span class="icon">${icon}</span>
+                        <span class="q-text">${text}</span>
+                        ${extra ? `<span class="meta">${extra}</span>` : ''}
+                    `;
+                queue.appendChild(item);
+                queue.classList.add('show');
+                return item;
+            }
+
+            function createResultItem(id, text, extra) {
+                const item = document.createElement('div');
+                item.className = 'q-item result';
+                item.dataset.id = id;
+
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'icon';
+                iconSpan.textContent = '♪';
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'q-text';
+                textSpan.textContent = text;
+
+                const metaSpan = document.createElement('span');
+                metaSpan.className = 'meta';
+                metaSpan.textContent = extra || '';
+
+                const menuWrap = document.createElement('div');
+                menuWrap.className = 'menu-wrap';
+
+                const menuBtn = document.createElement('button');
+                menuBtn.className = 'menu-btn';
+                menuBtn.textContent = '⋯';
+                menuBtn.setAttribute('aria-label', '更多操作');
+
+                menuWrap.appendChild(menuBtn);
+
+                item.appendChild(iconSpan);
+                item.appendChild(textSpan);
+                item.appendChild(metaSpan);
+                item.appendChild(menuWrap);
+
+                item.addEventListener('click', function(e) {
+                    if (e.target.closest('.menu-wrap') || e.target.closest('.menu-btn')) return;
+                    const sid = this.dataset.id;
+                    if (sid) {
+                        playSong(sid);
+                    }
+                });
+
+                menuBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const sid = item.dataset.id;
+                    if (sid) {
+                        openDropdown(this, sid);
+                    }
+                });
+
+                return item;
+            }
+
+            async function playSong(id) {
+                if (downloading) return;
+
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                    isPlaying = false;
+                }
+
+                setPill('active', '获取试听...');
+                try {
+                    const url = await fetchUrl(id);
+                    const audio = new Audio(url);
+                    currentAudio = audio;
+                    isPlaying = true;
+                    showStopBtn(true);
+
+                    audio.play().then(() => {
+                        setPill('success', '♪ 试听中...');
+                    }).catch(() => {
+                        setPill('error', '试听失败');
+                        showStopBtn(false);
+                        isPlaying = false;
+                        setTimeout(() => setPill('', '准备就绪'), 2500);
+                    });
+
+                    audio.addEventListener('ended', function() {
+                        if (currentAudio === this) {
+                            currentAudio = null;
+                            isPlaying = false;
+                            showStopBtn(false);
+                            if (!downloading) {
+                                setPill('', '准备就绪');
+                            }
+                        }
+                    });
+
+                    audio.addEventListener('error', function() {
+                        if (currentAudio === this) {
+                            currentAudio = null;
+                            isPlaying = false;
+                            showStopBtn(false);
+                            setPill('error', '播放错误');
+                            setTimeout(() => setPill('', '准备就绪'), 2500);
+                        }
+                    });
+
+                } catch (e) {
+                    setPill('error', '获取试听失败');
+                    showStopBtn(false);
+                    isPlaying = false;
+                    setTimeout(() => setPill('', '准备就绪'), 2500);
+                }
+            }
+
+            function extractId(raw) {
+                const t = raw.trim();
+                if (!t) return null;
+                const m = t.match(/[?&]id=(\d+)/) || t.match(/\/song\/(\d+)/) || t.match(/^(\d+(?:,\d+)*)$/);
+                return m ? m[1] : null;
+            }
+
+            function extractLink(raw) {
+                const t = raw.trim();
+                if (!t) return null;
+                const m = t.match(/[?&]id=(\d+)/) || t.match(/\/song\/(\d+)/);
+                return m ? m[1] : null;
+            }
+
+            async function fetchSearch(keyword) {
+                const url = `${API}/search?keywords=${encodeURIComponent(keyword)}&limit=20`;
+                const resp = await fetch(url, { signal: abortCtrl?.signal });
+                if (!resp.ok) throw new Error('搜索请求失败');
+                const json = await resp.json();
+                if (!json?.result?.songs) throw new Error('未找到相关歌曲');
+                return json.result.songs;
+            }
+
+            async function fetchUrl(id) {
+                const url = `${API}/song/url/v1?id=${encodeURIComponent(id)}&level=${LEVEL}&unblock=${UNBLOCK}`;
+                const resp = await fetch(url, { signal: abortCtrl?.signal });
+                if (!resp.ok) throw new Error('API请求失败');
+                const json = await resp.json();
+                let musicUrl = null;
+                if (json?.data) {
+                    if (Array.isArray(json.data)) {
+                        const entry = json.data.find(e => String(e.id) === String(id));
+                        musicUrl = entry?.url || json.data[0]?.url;
+                    } else if (typeof json.data === 'object') {
+                        musicUrl = json.data.url || json.data[id]?.url;
+                    } else if (typeof json.data === 'string') {
+                        musicUrl = json.data;
+                    }
+                }
+                if (!musicUrl && json?.url) musicUrl = json.url;
+                if (!musicUrl) throw new Error('未找到音乐识别码');
+                return musicUrl;
+            }
+
+            async function dlBlob(url, filename, onProg) {
+                const resp = await fetch(url, { signal: abortCtrl?.signal });
+                if (!resp.ok) throw new Error('文件请求失败');
+                const total = resp.headers.get('content-length') ? parseInt(resp.headers.get('content-length'), 10) : null;
+                let received = 0;
+                const reader = resp.body.getReader();
+                const chunks = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    if (total && onProg) onProg(Math.round((received / total) * 100));
+                }
+                const blob = new Blob(chunks);
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+            }
+
+            async function dlDirect(url, filename) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+
+            async function processOne(id) {
+                const url = await fetchUrl(id);
+                const filename = id + '.mp3';
+                try {
+                    await dlBlob(url, filename, pct => setProgress(pct, `下载中: ${filename}`));
+                } catch (e) {
+                    if (e.name === 'AbortError') throw e;
+                    await dlDirect(url, filename);
+                    setProgress(100, `已触发: ${filename}`);
+                }
+            }
+
+            function updateFooter() {
+                const hints = {
+                    id: '本工具由个人开发者Galaxy出品，严禁盗用！',
+                    search: '使用工具遇到问题了？尝试联系开发者吧 : 3826079838',
+                    link: '本工具由个人开发者Galaxy出品，严禁盗用！'
+                };
+                footer.textContent = hints[currentMode] || hints.id;
+            }
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    currentMode = this.dataset.mode;
+                    const placeholders = {
+                        id: '请输入音乐识别码',
+                        search: '输入歌名搜索 (如 起风了)',
+                        link: '粘贴网易云链接'
+                    };
+                    input.placeholder = placeholders[currentMode] || '请输入';
+                    clearSearchResults();
+                    resetProgress();
+                    queue.classList.remove('show');
+                    queue.innerHTML = '';
+                    updateFooter();
+                    setPill('', '准备就绪');
+                    stopPlayback();
+                    input.focus();
+                });
+            });
+
+            async function start() {
+                if (downloading) return;
+                const raw = input.value.trim();
+                if (!raw) {
+                    setPill('error', '请输入内容');
+                    setTimeout(() => setPill('', '准备就绪'), 2000);
+                    return;
+                }
+
+                stopPlayback();
+
+                if (currentMode === 'search') {
+                    await handleSearch(raw);
+                    return;
+                }
+
+                if (currentMode === 'link') {
+                    const id = extractLink(raw);
+                    if (!id) {
+                        setPill('error', '未能解析链接中的音乐ID');
+                        setTimeout(() => setPill('', '准备就绪'), 2500);
+                        return;
+                    }
+                    input.value = id;
+                    updateClear();
+                    await handleDownload([id]);
+                    return;
+                }
+
+                const extracted = extractId(raw);
+                if (!extracted) {
+                    setPill('error', '请输入有效的音乐识别码');
+                    setTimeout(() => setPill('', '准备就绪'), 2500);
+                    return;
+                }
+                const ids = extracted.split(',').map(s => s.trim()).filter(Boolean);
+                if (!ids.length) {
+                    setPill('error', '识别出现错误');
+                    setTimeout(() => setPill('', '准备就绪'), 2500);
+                    return;
+                }
+                await handleDownload(ids);
+            }
+
+            async function handleSearch(keyword) {
+                downloading = true;
+                abortCtrl = new AbortController();
+                btn.disabled = true;
+                btn.classList.add('loading');
+                resetProgress();
+                queue.classList.remove('show');
+                queue.innerHTML = '';
+                searchResults = [];
+                setPill('active', '搜索中...');
+                setProgress(20, `搜索: ${keyword}`);
+
+                try {
+                    const songs = await fetchSearch(keyword);
+                    setProgress(100, `找到 ${songs.length} 首歌曲`);
+                    setPill('success', `找到 ${songs.length} 首`);
+
+                    songs.forEach((song, idx) => {
+                        const artists = song.ar?.map(a => a.name).join(', ') || '未知歌手';
+                        const name = song.name || '未知歌曲';
+                        const id = song.id;
+                        const extra = artists + '  ·  ' + Math.floor(song.dt / 1000) + 's';
+                        const displayText = (idx + 1) + '. ' + name;
+                        const item = createResultItem(id, displayText, extra);
+                        queue.appendChild(item);
+                        searchResults.push(id);
+                    });
+
+                    queue.classList.add('show');
+
+                    if (songs.length === 0) {
+                        setPill('error', '未找到相关歌曲');
+                    }
+
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        setPill('error', '已取消');
+                    } else {
+                        setPill('error', err.message);
+                        addItem('', 'failed', '搜索失败: ' + err.message);
+                    }
+                }
+
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                downloading = false;
+                abortCtrl = null;
+
+                setTimeout(() => {
+                    if (!downloading && !queue.querySelector('.result')) {
+                        setPill('', '准备就绪');
+                    }
+                }, 3000);
+            }
+
+            async function handleDownload(ids) {
+                downloading = true;
+                abortCtrl = new AbortController();
+                btn.disabled = true;
+                btn.classList.add('loading');
+                resetProgress();
+                queue.classList.remove('show');
+                queue.innerHTML = '';
+                setPill('active', ids.length === 1 ? '获取中...' : '共 ' + ids.length + ' 首');
+                setProgress(0, '获取URL...');
+
+                let ok = 0,
+                    fail = 0;
+                for (let i = 0; i < ids.length; i++) {
+                    const id = ids[i];
+                    const filename = id + '.mp3';
+                    const base = ids.length > 1 ? Math.round((i / ids.length) * 100) : 0;
+                    setProgress(base, '[' + (i + 1) + '/' + ids.length + '] 获取 ' + filename);
+                    try {
+                        await processOne(id);
+                        ok++;
+                        addItem(id, 'done', filename + ' — 完成');
+                        if (ids.length > 1) setProgress(Math.round(((i + 1) / ids.length) * 100), '[' + (i + 1) + '/' + ids
+                            .length + '] 完成');
+                        else setProgress(100, '下载完成');
+                    } catch (err) {
+                        if (err.name === 'AbortError') {
+                            addItem(id, 'failed', filename + ' — 已取消');
+                            fail++;
+                            break;
+                        }
+                        fail++;
+                        addItem(id, 'failed', filename + ' — ' + err.message);
+                        if (ids.length > 1) setProgress(Math.round(((i + 1) / ids.length) * 100), '[' + (i + 1) + '/' + ids
+                            .length + '] 失败');
+                    }
+                    if (i < ids.length - 1 && !abortCtrl.signal.aborted) await new Promise(r => setTimeout(r, 800));
+                }
+
+                if (abortCtrl.signal.aborted) {
+                    setPill('error', '已取消');
+                    setProgress(0, '已取消');
+                } else if (fail === 0 && ok > 0) {
+                    setPill('success', ok === 1 ? '下载完成' : '完成 ' + ok + ' 首');
+                    setProgress(100, ok === 1 ? '下载完成' : '全部 ' + ok + ' 首完成');
+                } else if (ok > 0 && fail > 0) {
+                    setPill('success', '完成 ' + ok + ' · 失败 ' + fail);
+                    setProgress(100, '完成 ' + ok + '，失败 ' + fail);
+                } else {
+                    setPill('error', '下载失败');
+                    setProgress(0, '下载失败');
+                }
+
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                downloading = false;
+                abortCtrl = null;
+                setTimeout(() => {
+                    if (!downloading) {
+                        setPill('', '准备就绪');
+                        if (progFill.style.width === '100%' || progFill.style.width === '0%') {
+                            setTimeout(() => { if (!downloading) resetProgress(); }, 3000);
+                        }
+                    }
+                }, 3000);
+            }
+
+            btn.addEventListener('click', function() {
+                if (downloading) {
+                    if (abortCtrl) { abortCtrl.abort();
+                        setPill('error', '取消中...'); }
+                    return;
+                }
+                start();
+            });
+
+            updateClear();
+            setPill('', '准备就绪');
+            updateFooter();
+
+            window.addEventListener('resize', closeDropdown);
+            window.addEventListener('scroll', closeDropdown);
+        })();
+    </script>
+</body>
+</html>
